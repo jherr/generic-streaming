@@ -1,25 +1,23 @@
 "use client";
 import { useEffect, useRef, useState, useCallback } from "react";
-import type { StreamedResponse } from "./streaming-types";
+import type { StreamedResponse, StreamedResponseItem } from "./types";
 
 export function useStreamingResponse<T>(
   action: () => Promise<StreamedResponse<T>>
 ): {
-  items: (T | null)[];
-  ids: string[];
+  items: StreamedResponseItem<T>[];
   refetch: () => void;
 } {
-  const [items, setItems] = useState<(T | null)[]>([]);
-  const [ids, setIDs] = useState<string[]>([]);
+  const [items, setItems] = useState<StreamedResponseItem<T>[]>([]);
 
   const id = useRef<string | null>(null);
   const pending = useRef(false);
+
   const refetch = useCallback(() => {
     if (!pending.current) {
       const getNext = (resp: StreamedResponse<T>) => {
         id.current = resp.id;
         setItems(resp.items);
-        setIDs(resp.ids);
         if (resp.next) {
           resp.next(id.current).then(getNext);
         } else {
@@ -27,7 +25,6 @@ export function useStreamingResponse<T>(
         }
       };
       setItems([]);
-      setIDs([]);
       pending.current = true;
       action().then(getNext);
     }
@@ -35,5 +32,5 @@ export function useStreamingResponse<T>(
 
   useEffect(refetch, [refetch]);
 
-  return { items, ids, refetch };
+  return { items, refetch };
 }

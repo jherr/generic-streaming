@@ -1,4 +1,4 @@
-import type { StreamedResponse } from "./streaming-types";
+import type { StreamedResponse } from "./types";
 
 const generateGUID = () =>
   "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
@@ -10,6 +10,7 @@ const _streamingRequests: Record<
   string,
   {
     id: string;
+    status: "pending" | "fulfilled" | "rejected";
     promise: Promise<unknown>;
     data: unknown | null;
   }[]
@@ -19,17 +20,19 @@ function getCurrentStreamingState<T>(id: string) {
   if (!_streamingRequests[id]) {
     return {
       id,
-      ids: [],
       items: [],
       next: null,
     };
   }
-  const items = _streamingRequests[id].map((item) => item.data as T | null);
+  const items = _streamingRequests[id].map(({ id, data, status }) => ({
+    id,
+    status,
+    data: data as T | null,
+  }));
   return {
     id,
-    ids: _streamingRequests[id].map((item) => item.id),
     items,
-    next: items.includes(null) ? next : null,
+    next: items.map(({ data }) => data).includes(null) ? next : null,
   };
 }
 
@@ -48,10 +51,16 @@ export async function buildStreamedResponse<T>(
 
   _streamingRequests[id] = items.map((item, index) => ({
     id: item.id,
-    promise: item.promise.then((data) => {
-      _streamingRequests[id][index].data = data;
-      return data;
-    }) as Promise<T>,
+    status: "pending",
+    promise: item.promise
+      .then((data) => {
+        _streamingRequests[id][index].status = "fulfilled";
+        _streamingRequests[id][index].data = data;
+        return data;
+      })
+      .catch((e) => {
+        _streamingRequests[id][index].status = "rejected";
+      }) as Promise<T>,
     data: null,
   }));
 
