@@ -14,6 +14,87 @@ Each of the stocks has a different amount of lag in getting data from the servic
 
 The `Dashboard` component then uses the `useStreamingResponse` hook to handle the streaming response and render the components as they come in.
 
+## Using The API
+
+In a server action you can use the `buildStreamedResponse` function to take a set of ID'ed promises as an array and stream them to the client:
+
+```ts
+"use server";
+import type { StockInfo } from "../types";
+import StockWithCounter from "../components/StockWithCounter";
+
+import type { StreamedResponse } from "../streaming-lib/types";
+import { buildStreamedResponse } from "../streaming-lib/server";
+
+export const getStocks = async (): Promise<StreamedResponse<StockInfo>> => {
+  async function generateFakeStock(
+    name: string,
+    delay: number
+  ): Promise<StockInfo> {
+    await new Promise((resolve) => setTimeout(resolve, delay));
+    const price = Math.random() * 1000;
+    return {
+      name,
+      price,
+      ui: <StockWithCounter name={name} price={price} />,
+    };
+  }
+
+  return buildStreamedResponse([
+    {
+      id: "ARPL",
+      promise: generateFakeStock("ARPL", 1000),
+    },
+    {
+      id: "GLOG",
+      promise: generateFakeStock("GLOG", 6000),
+    },
+    ...
+  ]);
+};
+```
+
+You can have whatever promises you want in the array. You can have mutiple of the same type of promise, or any combination of promises. The only requirement is that each promise has an ID that is unique within the array.
+
+Then on the client you can use the `useStreamingResponse` hook to handle the streaming response:
+
+```tsx
+"use client";
+import { useStreamingResponse } from "../streaming-lib/client";
+import type { StreamedResponse } from "../streaming-lib/types";
+
+import type { StockInfo } from "../types";
+
+export default function Dashboard({
+  getStocks,
+}: {
+  getStocks: () => Promise<StreamedResponse<StockInfo>>;
+}) {
+  const { items: stocks, refetch } = useStreamingResponse(getStocks);
+
+  return (
+    <>
+      <button
+        onClick={refetch}
+        className="bg-blue-500 text-white rounded-full px-4 py-2 text-2xl font-bold"
+      >
+        Refetch
+      </button>
+      <div className="grid grid-cols-3 gap-4 mt-5">
+        {stocks.map(({ id, data }) => (
+          <div key={id}>
+            <div className="font-bold text-3xl">{id}</div>
+            {data?.ui ? <div>{data.ui}</div> : <div>Loading...</div>}
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+```
+
+For each item in the array we get `id`, `status` and `data`. ID is a unique string. `status` is the status of the promise (pending, fulfilled, rejected). And `data` is the data returned from the promise. In this case we have a `ui` property on the data that holds the component to render. But you can have whatever data you want in the `data` property. You can have a combination of data and components. Or no data and just a component. Or multiple components. Whatever you want.
+
 ## Advantages Over The Vercel/AI Approach
 
 - This approach is disconnected from AI. You can put whatever kind of requests you want into the array of requests. In this case we send back an object with the name of the stock, the price, and then a `ui` property that holds the rendered component.
