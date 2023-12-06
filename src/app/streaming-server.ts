@@ -1,4 +1,4 @@
-import type { StreamedResponse } from "./types";
+import type { StreamedResponse } from "./streaming-types";
 
 const generateGUID = () =>
   "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
@@ -9,35 +9,51 @@ const generateGUID = () =>
 const _streamingRequests: Record<
   string,
   {
+    id: string;
     promise: Promise<unknown>;
     data: unknown | null;
   }[]
 > = {};
 
-async function next<T>(id: string): Promise<StreamedResponse<T>> {
-  "use server";
-  const items = _streamingRequests[id].map((item) => item.data);
+function getCurrentStreamingState<T>(id: string) {
+  if (!_streamingRequests[id]) {
+    return {
+      id,
+      ids: [],
+      items: [],
+      next: null,
+    };
+  }
+  const items = _streamingRequests[id].map((item) => item.data as T | null);
   return {
     id,
-    items: items as T[],
+    ids: _streamingRequests[id].map((item) => item.id),
+    items,
     next: items.includes(null) ? next : null,
   };
 }
 
+async function next<T>(id: string): Promise<StreamedResponse<T>> {
+  "use server";
+  return getCurrentStreamingState(id);
+}
+
 export async function buildStreamedResponse<T>(
-  items: Promise<T>[]
+  items: {
+    id: string;
+    promise: Promise<T>;
+  }[]
 ): Promise<StreamedResponse<T>> {
   const id = generateGUID();
-  _streamingRequests[id] = items.map((promise, index) => ({
-    promise: promise.then((data) => {
+
+  _streamingRequests[id] = items.map((item, index) => ({
+    id: item.id,
+    promise: item.promise.then((data) => {
       _streamingRequests[id][index].data = data;
       return data;
     }) as Promise<T>,
     data: null,
   }));
-  return {
-    id,
-    items: _streamingRequests[id].map((item) => item.data) as (T | null)[],
-    next,
-  };
+
+  return getCurrentStreamingState(id);
 }

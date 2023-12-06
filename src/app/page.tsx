@@ -1,4 +1,7 @@
-import type { StockInfo, StreamedResponse } from "./types";
+import type { StockInfo } from "./types";
+import StockWithCounter from "./StockWithCounter";
+
+import type { StreamedResponse } from "./streaming-types";
 import { buildStreamedResponse } from "./streaming-server";
 
 import Dashboard from "./Dashboard";
@@ -15,22 +18,35 @@ const getStocks = async (): Promise<StreamedResponse<StockInfo>> => {
     return {
       name,
       price,
-      ui: (
-        <div className="flex flex-col items-center justify-center p-4 m-4 bg-white rounded-lg shadow-lg dark:bg-zinc-800">
-          <div className="text-xl italic">{name}</div>
-          <div className="text-2xl font-bold">${price.toFixed(2)}</div>
-        </div>
-      ),
+      ui: <StockWithCounter name={name} price={price} />,
     };
   }
 
   return buildStreamedResponse([
-    generateFakeStock("AAPL", 1000),
-    generateFakeStock("GOOG", 2000),
-    generateFakeStock("MSFT", 3000),
-    generateFakeStock("AMZN", 4000),
-    generateFakeStock("FB", 5000),
-    generateFakeStock("TSLA", 6000),
+    {
+      id: "AAPL",
+      promise: generateFakeStock("AAPL", 1000),
+    },
+    {
+      id: "GOOG",
+      promise: generateFakeStock("GOOG", 6000),
+    },
+    {
+      id: "MSFT",
+      promise: generateFakeStock("MSFT", 3000),
+    },
+    {
+      id: "AMZN",
+      promise: generateFakeStock("AMZN", 2000),
+    },
+    {
+      id: "FB",
+      promise: generateFakeStock("FB", 5000),
+    },
+    {
+      id: "TSLA",
+      promise: generateFakeStock("TSLA", 1500),
+    },
   ]);
 };
 
